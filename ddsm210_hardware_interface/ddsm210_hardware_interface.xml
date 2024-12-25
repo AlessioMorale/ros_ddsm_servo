@@ -1,0 +1,9 @@
+<library path="ddsm210-hardware-interface">
+  <class name="ddsm210_hardware_interface/HardwareInterfaceDDSM210"
+         type="ddsm210_hardware_interface::HardwareInterfaceDDSM210"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control hardware interface.
+    </description>
+  </class>
+</library>
