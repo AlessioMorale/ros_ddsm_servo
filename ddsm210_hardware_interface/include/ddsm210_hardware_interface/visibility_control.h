@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DDSM210-HARDWARE-INTERFACE__VISIBILITY_CONTROL_H_
-#define DDSM210-HARDWARE-INTERFACE__VISIBILITY_CONTROL_H_
+#ifndef DDSM210_HARDWARE_INTERFACE__VISIBILITY_CONTROL_H_
+#define DDSM210_HARDWARE_INTERFACE__VISIBILITY_CONTROL_H_
 
 // This logic was borrowed (then namespaced) from the examples on the gcc wiki:
 //     https://gcc.gnu.org/wiki/Visibility
@@ -47,4 +47,4 @@
 #define TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC_TYPE
 #endif
 
-#endif  // DDSM210-HARDWARE-INTERFACE__VISIBILITY_CONTROL_H_
+#endif  // DDSM210_HARDWARE_INTERFACE__VISIBILITY_CONTROL_H_

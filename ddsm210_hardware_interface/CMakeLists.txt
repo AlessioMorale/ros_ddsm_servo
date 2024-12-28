@@ -12,6 +12,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(ament_cmake_gmock REQUIRED)
+find_package(ros2_control_test_assets REQUIRED)
 add_library(
   ${PROJECT_NAME}
   SHARED
@@ -49,7 +50,7 @@ install(
 
 if(BUILD_TESTING)
   set(TEST_PROJECT_NAME test_${PROJECT_NAME})
-  ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm_210.cpp)
+  ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm210.cpp)
   target_include_directories(${TEST_PROJECT_NAME} PRIVATE include)
   ament_target_dependencies(
     ${TEST_PROJECT_NAME}

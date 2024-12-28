@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>ddsm210-hardware-interface</name>
+  <name>ddsm210_hardware_interface</name>
   <version>0.0.0</version>
   <description>Hardware interface for ddsm-210 servo</description>
   <maintainer email="alessiomorale@gmail.com">Alessio Morale</maintainer>
@@ -9,7 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_gmock</buildtool_depend>
-  <buildtool_depend>ros2_control_test_assets</buildtool_depend>
+  <test_depend>ros2_control_test_assets</test_depend>
 
   <depend>hardware_interface</depend>
 

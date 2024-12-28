@@ -8,7 +8,7 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>ddsm210-hardware-interface</depend>
+  <depend>ddsm210_hardware_interface</depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "ddsm210-hardware-interface/visibility_control.h"
+#include "ddsm210_hardware_interface/visibility_control.h"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
@@ -27,7 +27,7 @@
 #include "rclcpp/macros.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
-namespace ddsm210-hardware-interface
+namespace ddsm210_hardware_interface
 {
 class HardwareInterfaceDDSM210 : public hardware_interface::SystemInterface
 {
@@ -67,6 +67,6 @@ private:
   std::vector<double> hw_states_;
 };
 
-}  // namespace ddsm210-hardware-interface
+}  // namespace ddsm210_hardware_interface
 
-#endif  // ddsm210-hardware-interface__HARDWARE_INTERFACE_DDSM_210_HPP_
+#endif  // ddsm210_hardware_interface__HARDWARE_INTERFACE_DDSM_210_HPP_
