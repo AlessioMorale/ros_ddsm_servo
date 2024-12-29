@@ -16,29 +16,40 @@
 #ifndef DDSM210_HARDWARE_INTERFACE__HARDWARE_INTERFACE_DDSM_210_HPP_
 #define DDSM210_HARDWARE_INTERFACE__HARDWARE_INTERFACE_DDSM_210_HPP_
 
+#include <rclcpp/logger.hpp>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "ddsm210_hardware_interface/visibility_control.h"
-#include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
+#include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "rclcpp/macros.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include <atomic>
+#include <stdexcept>
+#include <string>
 
-namespace ddsm210_hardware_interface
-{
-class HardwareInterfaceDDSM210 : public hardware_interface::SystemInterface
-{
+namespace ddsm210_hardware_interface {
+
+class MotorError : public std::runtime_error {
 public:
+  explicit MotorError(const std::string &msg) : std::runtime_error(msg) {
+  }
+};
+
+class HardwareInterfaceDDSM210 : public hardware_interface::SystemInterface {
+public:
+  HardwareInterfaceDDSM210();
+  ~HardwareInterfaceDDSM210();
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::CallbackReturn on_init(
-    const hardware_interface::HardwareInfo & info) override;
+  hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo &info) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::CallbackReturn on_configure(
-    const rclcpp_lifecycle::State & previous_state) override;
+  hardware_interface::CallbackReturn
+  on_configure(const rclcpp_lifecycle::State &previous_state) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
@@ -47,26 +58,59 @@ public:
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::CallbackReturn on_activate(
-    const rclcpp_lifecycle::State & previous_state) override;
+  hardware_interface::CallbackReturn
+  on_activate(const rclcpp_lifecycle::State &previous_state) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::CallbackReturn on_deactivate(
-    const rclcpp_lifecycle::State & previous_state) override;
+  hardware_interface::CallbackReturn
+  on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::return_type read(
-    const rclcpp::Time & time, const rclcpp::Duration & period) override;
+  hardware_interface::return_type read(const rclcpp::Time &time,
+                                       const rclcpp::Duration &period) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  hardware_interface::return_type write(
-    const rclcpp::Time & time, const rclcpp::Duration & period) override;
+  hardware_interface::return_type write(const rclcpp::Time &time,
+                                        const rclcpp::Duration &period) override;
+
+  TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
+  hardware_interface::return_type
+  perform_command_mode_switch(const std::vector<std::string> &start_interfaces,
+                              const std::vector<std::string> &stop_interfaces) override;
 
 private:
-  std::vector<double> hw_commands_;
-  std::vector<double> hw_states_;
+  enum class MotorState { UNKNOWN, INITIALIZED, ACTIVE, INACTIVE, ERROR };
+
+  size_t extract_joint_index(const std::string &interface_name);
+  void emergency_stop(const std::string &reason);
+  void stop_motor(size_t index);
+  void safety_monitor();
+
+  bool is_motor_operational(size_t index) const;
+  rclcpp::Logger logger_{rclcpp::get_logger("HardwareInterfaceDDSM210")};
+  size_t motor_count_;
+  std::vector<double> velocity_commands_;
+  std::vector<double> effort_commands_;
+  std::vector<double> velocity_states_;
+  std::vector<double> effort_states_;
+  std::vector<std::string> active_command_interfaces_;
+  std::string serial_port_{};
+
+  std::vector<MotorState> motor_states_;
+  std::vector<uint8_t> motor_ids_;
+  std::atomic<bool> is_emergency_stopped_;
+  std::atomic<bool> is_initialized_;
+  std::atomic<bool> stop_safety_monitor_{false};
+  std::atomic<bool> is_system_running_{false};
+  std::mutex interface_mutex_;
+  std::thread safety_thread_;
+
+  rclcpp::Time last_read_time_;
+  rclcpp::Time last_write_time_;
+
+  const double communication_timeout_; // seconds
 };
 
-}  // namespace ddsm210_hardware_interface
+} // namespace ddsm210_hardware_interface
 
-#endif  // ddsm210_hardware_interface__HARDWARE_INTERFACE_DDSM_210_HPP_
+#endif // ddsm210_hardware_interface__HARDWARE_INTERFACE_DDSM_210_HPP_

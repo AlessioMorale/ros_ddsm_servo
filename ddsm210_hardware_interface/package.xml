@@ -18,6 +18,11 @@
   <depend>rclcpp</depend>
 
   <depend>rclcpp_lifecycle</depend>
+  <depend>controller_manager</depend>
+  <depend>xacro</depend>
+  <depend>velocity_controllers</depend>
+  <depend>joint_state_broadcaster</depend>
+  <depend>ros2controlcli</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

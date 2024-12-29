@@ -48,6 +48,12 @@ install(
   DESTINATION include
 )
 
+install(
+  PROGRAMS
+  launch/test.launch.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   set(TEST_PROJECT_NAME test_${PROJECT_NAME})
   ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm210.cpp)
@@ -59,6 +65,13 @@ if(BUILD_TESTING)
     ros2_control_test_assets
   )
 endif()
+
+install(DIRECTORY
+  urdf
+  launch
+  config
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 ament_export_include_directories(
   include

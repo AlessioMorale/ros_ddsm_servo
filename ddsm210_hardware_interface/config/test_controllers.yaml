@@ -1,0 +1,19 @@
+controller_manager:
+  ros__parameters:
+    # see https://github.com/ros-controls/ros2_controllers/issues/1389
+    lock_memory: false
+
+    update_rate: 100
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    velocity_controller:
+      type: velocity_controllers/JointGroupVelocityController
+    
+    ddsm210_hardware_interface:
+      type: ddsm210_hardware_interface/DDSM210HardwareInterface
+
+velocity_controller:
+  ros__parameters:
+    joints:
+      - joint1
