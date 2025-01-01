@@ -1,6 +1,6 @@
 #include "boost/asio/io_context.hpp"
 #include "ddsm210_driver/comm/serial_port.hpp"
-#include "ddsm210_driver/motor.hpp"
+#include "ddsm210_driver/motors.hpp"
 #include "thread"
 #include <cstdlib>
 #include <exception>
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (ret == 0) {
-    auto motor = std::make_unique<ddsm210_driver::Motor>(std::list<uint8_t>{id}, std::move(port), false);
+    auto motor = std::make_unique<ddsm210_driver::Motors>(std::vector<uint8_t>{id}, std::move(port), false);
     motor->register_feedback_callback([](const ddsm210_driver::Motor_feedback_t &feedback) {
       std::cout << "Feedback: " << std::endl;
       std::cout << "  ID: " << static_cast<int>(feedback.id) << std::endl;
@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
       if (argc != 5) {
         ret = usage(argv);
       }
-      motor->set_mode(id, static_cast<ddsm210_driver::protocol::DDSM210_mode>(value));
+      motor->set_mode(id, static_cast<ddsm210_driver::command_mode>(value));
     } else if (action == "set_target") {
       if (argc != 5) {
         ret = usage(argv);

@@ -23,7 +23,7 @@
   <depend>velocity_controllers</depend>
   <depend>joint_state_broadcaster</depend>
   <depend>ros2controlcli</depend>
-
+  <depend>ddsm210_driver</depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

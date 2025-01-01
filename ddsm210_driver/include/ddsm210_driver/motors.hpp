@@ -4,7 +4,6 @@
 #include "ddsm210_driver/comm/port.hpp"
 #include <cstdint>
 #include <functional>
-#include <list>
 #include <map>
 #include <memory>
 #include <optional>
@@ -33,15 +32,15 @@ typedef struct
 } Motor_feedback_t;
 
 using motor_feedback_callback = std::function<void(const Motor_feedback_t&)>;
-class Motor
+class Motors
 {
 public:
-  Motor(std::list<uint8_t> ids, std::unique_ptr<comm::Port> port, bool auto_fail_safe = true);
-  ~Motor();
+  Motors(std::vector<uint8_t> ids, std::unique_ptr<comm::Port> port, bool auto_fail_safe = true);
+  ~Motors();
   bool set_id(uint8_t id);
   void drive(uint8_t id, command_mode mode, float setpoint, float acceleration_time, bool brake = false);
   void register_feedback_callback(motor_feedback_callback callback);
-  void set_mode(uint8_t id, protocol::DDSM210_mode mode);
+  void set_mode(uint8_t id, command_mode mode);
   void set_target(uint8_t id, float target, float acceleration_time = 0, bool brake = false);
   void set_fail_safe();
 private:

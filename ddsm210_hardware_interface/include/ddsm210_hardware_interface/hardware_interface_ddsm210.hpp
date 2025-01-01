@@ -16,6 +16,7 @@
 #ifndef DDSM210_HARDWARE_INTERFACE__HARDWARE_INTERFACE_DDSM_210_HPP_
 #define DDSM210_HARDWARE_INTERFACE__HARDWARE_INTERFACE_DDSM_210_HPP_
 
+#include <memory>
 #include <rclcpp/logger.hpp>
 #include <string>
 #include <thread>
@@ -31,7 +32,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <string>
-
+#include "ddsm210_driver/motors.hpp"
 namespace ddsm210_hardware_interface {
 
 class MotorError : public std::runtime_error {
@@ -83,10 +84,10 @@ private:
 
   size_t extract_joint_index(const std::string &interface_name);
   void emergency_stop(const std::string &reason);
-  void stop_motor(size_t index);
+  void stop_motors();
   void safety_monitor();
-
   bool is_motor_operational(size_t index) const;
+  void motor_feedback_callback(const ddsm210_driver::Motor_feedback_t&);
   rclcpp::Logger logger_{rclcpp::get_logger("HardwareInterfaceDDSM210")};
   size_t motor_count_;
   std::vector<double> velocity_commands_;
@@ -109,6 +110,7 @@ private:
   rclcpp::Time last_write_time_;
 
   const double communication_timeout_; // seconds
+  std::unique_ptr<ddsm210_driver::Motors> motors_driver_;
 };
 
 } // namespace ddsm210_hardware_interface

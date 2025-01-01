@@ -13,21 +13,26 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(ament_cmake_gmock REQUIRED)
 find_package(ros2_control_test_assets REQUIRED)
+find_package(ddsm210_driver REQUIRED)
+
 add_library(
   ${PROJECT_NAME}
   SHARED
   src/hardware_interface_ddsm210.cpp
 )
+
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
   include
 )
+
 ament_target_dependencies(
   ${PROJECT_NAME}
   hardware_interface
   rclcpp
   rclcpp_lifecycle
+  ddsm210_driver
 )
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -84,6 +89,7 @@ ament_export_dependencies(
   pluginlib
   rclcpp
   rclcpp_lifecycle
+  ddsm210_driver
 )
 
 ament_package()

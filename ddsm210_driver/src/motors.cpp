@@ -1,12 +1,12 @@
-#include "ddsm210_driver/motor.hpp"
+#include "ddsm210_driver/motors.hpp"
 #include "ddsm210_driver/protocol.hpp"
 #include <cstdint>
 #include <unistd.h>
 #include <iostream>
 
 namespace ddsm210_driver {
-Motor::Motor(std::list<uint8_t> ids, std::unique_ptr<comm::Port> port, bool auto_fail_safe) : port_(std::move(port)), auto_fail_safe_(auto_fail_safe) {
-  port_->set_receive_callback(std::bind(&Motor::receive_callback, this, std::placeholders::_1));
+Motors::Motors(std::vector<uint8_t> ids, std::unique_ptr<comm::Port> port, bool auto_fail_safe) : port_(std::move(port)), auto_fail_safe_(auto_fail_safe) {
+  port_->set_receive_callback(std::bind(&Motors::receive_callback, this, std::placeholders::_1));
 
   for (auto id : ids) {
     motor_modes_[id] = command_mode::MODE_INVALID;
@@ -16,9 +16,7 @@ Motor::Motor(std::list<uint8_t> ids, std::unique_ptr<comm::Port> port, bool auto
   }
 }
 
-void Motor::receive_callback(std::vector<uint8_t> data) {
-  std::cerr << "recvd" << std::endl;
-
+void Motors::receive_callback(std::vector<uint8_t> data) {
   if (data.size() != sizeof(protocol::DDSM210_packet_t)) {
     std::cerr << "Invalid packet size " << data.size() << std::endl;
     return;
@@ -82,31 +80,51 @@ void Motor::receive_callback(std::vector<uint8_t> data) {
   }
 }
 
-void Motor::set_fail_safe() {
+void Motors::set_fail_safe() {
   for (auto motor : motor_modes_) {
     auto id = motor.first;
-    set_mode(id, protocol::DDSM210_mode::MODE_OPEN_LOOP);
-    usleep(protocol::utils::COMMANDS_DELAY_US);
+    for(int i = 0; i < 10; i++){
+      if(motor_modes_[id] == command_mode::MODE_OPENLOOP){
+        break;
+      }
+      set_mode(id, command_mode::MODE_OPENLOOP);
+      std::cerr<< "Setting motor " << (int)id << " to open loop mode" << std::endl;
+      usleep(protocol::utils::COMMANDS_DELAY_US);
+    }
     // Set the motor target to 0 to stop any motion
-    set_target(id, 0.0f);
+    //set_target(id, 0.0f, 0.5,false);
     usleep(protocol::utils::COMMANDS_DELAY_US);
   }
 }
 
-void Motor::set_mode(uint8_t id, protocol::DDSM210_mode mode) {
+void Motors::set_mode(uint8_t id, command_mode mode) {
+  static std::map<command_mode, protocol::DDSM210_mode> mode_map = {
+      {command_mode::MODE_OPENLOOP, protocol::DDSM210_mode::MODE_OPEN_LOOP},
+      {command_mode::MODE_POSITION, protocol::DDSM210_mode::MODE_POSITION},
+      {command_mode::MODE_VELOCITY, protocol::DDSM210_mode::MODE_VELOCITY},
+  };
+  if(motor_modes_[id] == mode){
+    return;
+  }
+  auto m = mode_map.find(mode);
+  
+  if(m == mode_map.end()){
+    throw std::runtime_error("Invalid mode");
+    return;
+  }
   protocol::DDSM210_packet_t packet;
   protocol::utils::prepare_packet(id, protocol::DDSM210_command::CMD_MODE_SWITCH, packet);
-  packet.data.packet.mode_switch.mode = mode;
+  packet.data.packet.mode_switch.mode = m->second;
   send_packet(packet);
 }
 
-void Motor::send_packet(protocol::DDSM210_packet_t &packet) {
+void Motors::send_packet(protocol::DDSM210_packet_t &packet) {
   protocol::utils::fill_crc(packet);
   auto data = std::vector<uint8_t>(packet.raw, packet.raw + sizeof(packet.raw));
   port_->send(data);
 }
 
-void Motor::set_target(uint8_t id, float target, float acceleration_time, bool brake) {
+void Motors::set_target(uint8_t id, float target, float acceleration_time, bool brake) {
   protocol::DDSM210_packet_t packet;
   protocol::utils::prepare_packet(id, protocol::DDSM210_command::CMD_DRIVE, packet);
   packet.data.packet.drive.target =
@@ -118,7 +136,7 @@ void Motor::set_target(uint8_t id, float target, float acceleration_time, bool b
   send_packet(packet);
 }
 
-bool Motor::set_id(uint8_t id) {
+bool Motors::set_id(uint8_t id) {
   protocol::DDSM210_packet_t packet;
   protocol::utils::prepare_packet(id, protocol::DDSM210_command::CMD_SET_ID, packet);
   packet.data.packet.set_id.id = id;
@@ -134,11 +152,11 @@ bool Motor::set_id(uint8_t id) {
   return last_id_received_.has_value() && last_id_received_.value() == id;
 }
 
-void Motor::register_feedback_callback(motor_feedback_callback callback) {
+void Motors::register_feedback_callback(motor_feedback_callback callback) {
   feedback_callback_ = callback;
 }
 
-Motor::~Motor() {
+Motors::~Motors() {
   if(auto_fail_safe_){
     set_fail_safe();
   }

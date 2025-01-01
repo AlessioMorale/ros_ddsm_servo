@@ -18,7 +18,7 @@ find_package(asio_cmake_module REQUIRED)
 find_package(ASIO REQUIRED)
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
-  src/motor.cpp
+  src/motors.cpp
 )
 
 ament_target_dependencies(${PROJECT_NAME} "ASIO")
@@ -37,7 +37,6 @@ install(
   LIBRARY DESTINATION lib
 )
 
-
 install(
   DIRECTORY include/
   DESTINATION include
@@ -49,7 +48,6 @@ ament_auto_add_executable(
   ${CLI_PROJECT_NAME}
   src/ddsm210_cli.cpp
 )
-
 
 target_include_directories(
   ${CLI_PROJECT_NAME}
@@ -80,4 +78,6 @@ if(BUILD_TESTING)
 
 endif()
 
+ament_export_include_directories(include)
+ament_export_libraries(${PROJECT_NAME})
 ament_package()

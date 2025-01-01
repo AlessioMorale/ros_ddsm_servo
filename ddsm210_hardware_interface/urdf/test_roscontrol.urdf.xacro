@@ -4,7 +4,8 @@
 <ros2_control name="ddsm210_test" type="system">
     <hardware>
         <plugin>ddsm210_hardware_interface/HardwareInterfaceDDSM210</plugin>
-        <param name="device">/dev/ttyUSB0</param>
+        <!-- <param name="device">/dev/ttyUSB0</param> -->
+        <param name="device">/dev/ttyAMA0</param>
     </hardware>
     <joint name="joint1">
         <command_interface name="velocity"/>

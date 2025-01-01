@@ -1,5 +1,5 @@
 #include "ddsm210_driver/comm/port.hpp"
-#include "ddsm210_driver/motor.hpp"
+#include "ddsm210_driver/motors.hpp"
 #include "ddsm210_driver/protocol.hpp"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -77,7 +77,7 @@ protected:
     auto port = std::make_unique<MockSerialPort>();
     mock_port_ = port.get();
     mock_port_->clear_sent_packets();
-    motor_ = std::make_unique<Motor>(motor_ids, std::move(port));
+    motor_ = std::make_unique<Motors>(motor_ids, std::move(port));
 
     motor_->register_feedback_callback((motor_feedback_callback)[this](const Motor_feedback_t &feedback) {
       feedback_queue_.push(feedback);
@@ -115,14 +115,14 @@ protected:
     CheckFailSafe();
   }
   
-  std::list<uint8_t> motor_ids {1, 2, 3};
+  std::vector<uint8_t> motor_ids {1, 2, 3};
   std::queue<Motor_feedback_t> feedback_queue_;
   MockSerialPort *mock_port_;
-  std::unique_ptr<Motor> motor_;
+  std::unique_ptr<Motors> motor_;
 };
 
 TEST_F(MotorTest, TestSetMode) {
-  motor_->set_mode(1, protocol::DDSM210_mode::MODE_OPEN_LOOP);
+  motor_->set_mode(1, command_mode::MODE_OPENLOOP);
 }
 
 TEST_F(MotorTest, TestSetTarget) {
