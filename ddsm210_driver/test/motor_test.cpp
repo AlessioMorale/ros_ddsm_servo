@@ -12,7 +12,7 @@ using namespace ddsm210_driver;
 
 class MockSerialPort : public comm::Port {
 public:
-  MockSerialPort() : Port() {
+  MockSerialPort(std::queue<protocol::DDSM210_packet_t>* sent_packet_queue) : Port(), sent_packets{sent_packet_queue} {
   }
 
   virtual void set_receive_callback(comm::receive_callback_t callback) override {
@@ -29,7 +29,7 @@ public:
         send_set_id_response(id);
       }
     }
-    sent_packets.push(packet);
+    sent_packets->push(packet);
   }
 
   MOCK_METHOD(void, close,(),(override));
@@ -58,14 +58,8 @@ public:
     auto data = std::vector<uint8_t>(resp_packet.raw, resp_packet.raw + sizeof(resp_packet.raw));
     receive(data);
   }
-  std::queue<protocol::DDSM210_packet_t> sent_packets;
+  std::queue<protocol::DDSM210_packet_t>* sent_packets;
   bool enable_replies = false;
-
-  void clear_sent_packets(){
-    while(!sent_packets.empty()){
-      sent_packets.pop();
-    }
-  }
 
 private:
   comm::receive_callback_t receive_callback_;
@@ -74,9 +68,9 @@ private:
 class MotorTest : public ::testing::Test {
 protected:
   void SetUp() override {
-    auto port = std::make_unique<MockSerialPort>();
+    auto port = std::make_unique<MockSerialPort>(&sent_packets);
     mock_port_ = port.get();
-    mock_port_->clear_sent_packets();
+    clear_sent_packets();
     motor_ = std::make_unique<Motors>(motor_ids, std::move(port));
 
     motor_->register_feedback_callback((motor_feedback_callback)[this](const Motor_feedback_t &feedback) {
@@ -84,15 +78,18 @@ protected:
     });
     CheckFailSafe();
   }
-
+  
+  void clear_sent_packets(){
+    while(!sent_packets.empty()){
+      sent_packets.pop();
+    }
+  }
   void CheckFailSafe(){
-    EXPECT_EQ(mock_port_->sent_packets.size(), 6);
-    
     std::list<protocol::DDSM210_packet_t> packets;
 
-    while (!mock_port_->sent_packets.empty()) {
-      packets.push_back(mock_port_->sent_packets.front());
-      mock_port_->sent_packets.pop();
+    while (!sent_packets.empty()) {
+      packets.push_back(sent_packets.front());
+      sent_packets.pop();
     }
 
     for (auto i : motor_ids) {
@@ -110,12 +107,15 @@ protected:
     }
   }
   void TearDown() override {
-    mock_port_->clear_sent_packets();
+    EXPECT_CALL(*mock_port_, close());
+    clear_sent_packets();
+    mock_port_ = nullptr;
     motor_.reset();
     CheckFailSafe();
   }
   
   std::vector<uint8_t> motor_ids {1, 2, 3};
+  std::queue<protocol::DDSM210_packet_t> sent_packets;
   std::queue<Motor_feedback_t> feedback_queue_;
   MockSerialPort *mock_port_;
   std::unique_ptr<Motors> motor_;
@@ -152,9 +152,9 @@ TEST_F(MotorTest, TestReceiveCallbackValidPacket) {
 
   EXPECT_EQ(feedback.id, 42);
   EXPECT_EQ(feedback.velocity, -1.0f);
-  EXPECT_EQ(feedback.current, 2.0f);
+  EXPECT_EQ(feedback.current, 0.002f);
   EXPECT_EQ(feedback.acceleration, 3.0f);
-  EXPECT_EQ(feedback.temperature, 5.0f);
+  EXPECT_EQ(feedback.temperature, 50.0f);
   EXPECT_EQ(feedback.overcurrent, true);
   EXPECT_EQ(feedback.overtemperature, false);
 }

@@ -88,11 +88,10 @@ void Motors::set_fail_safe() {
         break;
       }
       set_mode(id, command_mode::MODE_OPENLOOP);
-      std::cerr<< "Setting motor " << (int)id << " to open loop mode" << std::endl;
       usleep(protocol::utils::COMMANDS_DELAY_US);
     }
     // Set the motor target to 0 to stop any motion
-    //set_target(id, 0.0f, 0.5,false);
+    set_target(id, 0.0f, 0.5,false);
     usleep(protocol::utils::COMMANDS_DELAY_US);
   }
 }

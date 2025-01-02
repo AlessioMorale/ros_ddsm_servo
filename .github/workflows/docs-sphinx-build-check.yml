@@ -5,8 +5,8 @@ on:
     branches:
       - $ros_distro$
   schedule:
-    # Run every day to detect flakiness and broken dependencies
-    - cron: '23 5 * * *'
+    # Run every week to detect flakiness and broken dependencies
+    - cron: "0 0 * * 0"
 
 jobs:
   docs:
