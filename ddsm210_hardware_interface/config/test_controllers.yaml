@@ -9,7 +9,7 @@ controller_manager:
 
     velocity_controller:
       type: velocity_controllers/JointGroupVelocityController
-    
+
     ddsm210_hardware_interface:
       type: ddsm210_hardware_interface/DDSM210HardwareInterface
 

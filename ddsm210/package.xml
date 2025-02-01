@@ -3,7 +3,7 @@
 <package format="3">
   <name>ddsm210</name>
   <version>0.0.0</version>
-  <description>ROS control hardware inteface for ddsm-210 servo</description>
+  <description>ROS control hardware interface for ddsm-210 servo</description>
   <maintainer email="alessiomorale@gmail.com">Alessio Morale</maintainer>
   <license>MIT</license>
 

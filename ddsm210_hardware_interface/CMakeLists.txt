@@ -11,7 +11,6 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
-find_package(ament_cmake_gmock REQUIRED)
 find_package(ros2_control_test_assets REQUIRED)
 find_package(ddsm210_driver REQUIRED)
 
@@ -60,6 +59,7 @@ install(
 )
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gmock REQUIRED)
   set(TEST_PROJECT_NAME test_${PROJECT_NAME})
   ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm210.cpp)
   target_include_directories(${TEST_PROJECT_NAME} PRIVATE include)

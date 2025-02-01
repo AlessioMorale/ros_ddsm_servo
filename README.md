@@ -1,7 +1,7 @@
 ddsm-210
 ==========================================
 
-ROS control hardware inteface for ddsm-210 servo
+ROS control hardware interface for ddsm-210 servo
 
 ![Licence](https://img.shields.io/badge/License-MIT-blue.svg)
 
@@ -195,5 +195,3 @@ Here are some useful references for developing with ROS 2:
 
 
 ### Packages in `ddsm-210` metapackage
-
-

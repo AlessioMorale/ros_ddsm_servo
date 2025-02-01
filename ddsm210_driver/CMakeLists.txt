@@ -42,7 +42,7 @@ install(
   DESTINATION include
 )
 
-SET(CLI_PROJECT_NAME ${PROJECT_NAME}_cli)
+set(CLI_PROJECT_NAME ${PROJECT_NAME}_cli)
 
 ament_auto_add_executable(
   ${CLI_PROJECT_NAME}
