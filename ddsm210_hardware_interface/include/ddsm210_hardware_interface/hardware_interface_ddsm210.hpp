@@ -103,6 +103,7 @@ private:
   std::vector<double> effort_commands_;
   std::vector<double> velocity_states_;
   std::vector<double> effort_states_;
+  std::vector<ddsm210_driver::Motor_feedback_t> motor_feedbacks_;
   std::vector<std::string> active_command_interfaces_;
   std::string serial_port_{};
 

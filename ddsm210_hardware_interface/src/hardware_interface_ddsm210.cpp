@@ -35,6 +35,7 @@ HardwareInterfaceDDSM210::HardwareInterfaceDDSM210()
   effort_commands_{},
   velocity_states_{},
   effort_states_{},
+  motor_feedbacks_{},
   active_command_interfaces_{},
   is_emergency_stopped_(false),
   is_initialized_(false),
@@ -78,7 +79,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
   try {
     if (
       hardware_interface::SystemInterface::on_init(info) !=
-        hardware_interface::CallbackReturn::SUCCESS) {
+      hardware_interface::CallbackReturn::SUCCESS) {
       throw MotorError("Failed to initialize base system interface");
     }
 
@@ -103,6 +104,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     effort_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     motor_states_.resize(motor_count_, MotorState::UNKNOWN);
     motor_ids_.resize(motor_count_, 0);
+    motor_feedbacks_.resize(motor_count_);
     // Initialize command interface states
     active_command_interfaces_.resize(motor_count_);
 
@@ -110,7 +112,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     for (uint i = 0; i < info_.joints.size(); i++) {
       if (
         info_.joints[i].command_interfaces.size() != 2 ||
-          info_.joints[i].state_interfaces.size() != 2) {
+        info_.joints[i].state_interfaces.size() != 2) {
         throw MotorError("Joint " + std::to_string(i) + " missing required interfaces");
       }
 
@@ -127,7 +129,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
       } catch (const std::exception & e) {
         throw MotorError(
           "Joint " + std::to_string(i) + " has invalid motor_id parameter " +
-                         motor_id_param->second);
+          motor_id_param->second);
       }
       // Set default command interface to velocity
       active_command_interfaces_[i] = hardware_interface::HW_IF_VELOCITY;
@@ -135,15 +137,15 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
       motor_states_[i] = MotorState::INITIALIZED;
       RCLCPP_INFO(
         logger_, "Setting up joint %s with motor ID %d", info_.joints[i].name.c_str(),
-                  motor_ids_[i]);
+        motor_ids_[i]);
     }
 
     motors_driver_ =
-        std::make_unique<ddsm210_driver::Motors>(motor_ids_, std::move(serial_port_handle), false);
+      std::make_unique<ddsm210_driver::Motors>(motor_ids_, std::move(serial_port_handle), false);
     motors_driver_->register_feedback_callback(
       [this](const ddsm210_driver::Motor_feedback_t & feedback) {
-          motor_feedback_callback(feedback);
-        });
+        motor_feedback_callback(feedback);
+      });
 
     is_initialized_ = true;
     last_read_time_ = rclcpp::Clock().now();
@@ -162,10 +164,10 @@ std::vector<hardware_interface::StateInterface> HardwareInterfaceDDSM210::export
 
   for (uint i = 0; i < motor_count_; i++) {
     state_interfaces.emplace_back(hardware_interface::StateInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_states_[i]));
+      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_states_[i]));
 
     state_interfaces.emplace_back(hardware_interface::StateInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_states_[i]));
+      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_states_[i]));
   }
 
   return state_interfaces;
@@ -178,10 +180,10 @@ HardwareInterfaceDDSM210::export_command_interfaces()
 
   for (uint i = 0; i < motor_count_; i++) {
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_commands_[i]));
+      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_commands_[i]));
 
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_commands_[i]));
+      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_commands_[i]));
   }
 
   return command_interfaces;
@@ -259,10 +261,8 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
         throw MotorError("Motor " + std::to_string(i) + " is not responding");
       }
 
-      // TODO: Implement actual motor state reading
-      // For simulation, we'll just copy commands to states
-      velocity_states_[i] = velocity_commands_[i];
-      effort_states_[i] = effort_commands_[i];
+      velocity_states_[i] = motor_feedbacks_[i].velocity;
+      effort_states_[i] = motor_feedbacks_[i].current;
     }
 
     last_read_time_ = rclcpp::Clock().now();
@@ -345,7 +345,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::perform_command_mode_s
     }
     RCLCPP_INFO(
       logger_, "Switched joint %zu to %s control", joint_idx,
-                active_command_interfaces_[joint_idx].c_str());
+      active_command_interfaces_[joint_idx].c_str());
   }
 
   return hardware_interface::return_type::OK;
@@ -371,10 +371,10 @@ void HardwareInterfaceDDSM210::motor_feedback_callback(
   }
 
   // Update motor states
-  velocity_states_[motor_index] = feedback.velocity;
+  motor_feedbacks_[motor_index] = feedback;
   RCLCPP_INFO_THROTTLE(
     logger_, log_clock, 10000, "Feedback for %zu: velocity=%.2f, effort=%.2f", motor_index,
-                           velocity_states_[motor_index], effort_states_[motor_index]);  
+    velocity_states_[motor_index], effort_states_[motor_index]);
 }
 
 void HardwareInterfaceDDSM210::emergency_stop(const std::string & reason)
