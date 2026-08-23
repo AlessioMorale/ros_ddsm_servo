@@ -23,15 +23,18 @@ add_library(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-  include
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(
+target_link_libraries(
   ${PROJECT_NAME}
-  hardware_interface
-  rclcpp
-  rclcpp_lifecycle
-  ddsm210_driver
+  PUBLIC
+  hardware_interface::hardware_interface
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  rclcpp_lifecycle::rclcpp_lifecycle
+  ddsm210_driver::ddsm210_driver
 )
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -42,6 +45,7 @@ pluginlib_export_plugin_description_file(
 install(
   TARGETS
   ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -66,38 +70,39 @@ if(BUILD_TESTING)
   set(TEST_PROJECT_NAME test_${PROJECT_NAME})
   ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm210.cpp)
   target_include_directories(${TEST_PROJECT_NAME} PRIVATE include)
-  ament_target_dependencies(
+  target_link_libraries(
     ${TEST_PROJECT_NAME}
-    hardware_interface
-    pluginlib
-    ros2_control_test_assets
+    ${PROJECT_NAME}
+    hardware_interface::hardware_interface
+    pluginlib::pluginlib
+    ros2_control_test_assets::ros2_control_test_assets
   )
 
   # Atomic operations and thread safety tests
   set(TEST_NAME test_hardware_interface_lifecycle)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_lifecycle.cpp)
   target_include_directories(${TEST_NAME} PRIVATE include)
-  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+  target_link_libraries(${TEST_NAME} ${PROJECT_NAME} rclcpp::rclcpp ddsm210_driver::ddsm210_driver)
 
   set(TEST_NAME test_hardware_interface_threading)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_threading.cpp)
   target_include_directories(${TEST_NAME} PRIVATE include)
-  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+  target_link_libraries(${TEST_NAME} ${PROJECT_NAME} rclcpp::rclcpp ddsm210_driver::ddsm210_driver)
 
   set(TEST_NAME test_hardware_interface_safety)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_safety.cpp)
   target_include_directories(${TEST_NAME} PRIVATE include)
-  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+  target_link_libraries(${TEST_NAME} ${PROJECT_NAME} rclcpp::rclcpp ddsm210_driver::ddsm210_driver)
 
   set(TEST_NAME test_hardware_interface_integration)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_integration.cpp)
   target_include_directories(${TEST_NAME} PRIVATE include)
-  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+  target_link_libraries(${TEST_NAME} ${PROJECT_NAME} rclcpp::rclcpp ddsm210_driver::ddsm210_driver)
 
   set(TEST_NAME test_hardware_interface_edge_cases)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_edge_cases.cpp)
   target_include_directories(${TEST_NAME} PRIVATE include)
-  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+  target_link_libraries(${TEST_NAME} ${PROJECT_NAME} rclcpp::rclcpp ddsm210_driver::ddsm210_driver)
 endif()
 
 install(DIRECTORY
@@ -112,6 +117,9 @@ ament_export_include_directories(
 )
 ament_export_libraries(
   ${PROJECT_NAME}
+)
+ament_export_targets(
+  export_${PROJECT_NAME}
 )
 ament_export_dependencies(
   hardware_interface

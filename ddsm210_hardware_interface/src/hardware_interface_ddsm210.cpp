@@ -90,13 +90,13 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_configure(
 }
 
 hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
-  const hardware_interface::HardwareInfo & info)
+  const hardware_interface::HardwareComponentInterfaceParams & params)
 {
   std::lock_guard<std::mutex> lock(interface_mutex_);
 
   try {
     if (
-      hardware_interface::SystemInterface::on_init(info) !=
+      hardware_interface::SystemInterface::on_init(params) !=
       hardware_interface::CallbackReturn::SUCCESS) {
       throw MotorError("Failed to initialize base system interface");
     }
@@ -107,14 +107,14 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     }
 
     // open the serial port
-    serial_port_ = info.hardware_parameters.at(SERIAL_PORT_PARAMETER_NAME);
+    serial_port_ = info_.hardware_parameters.at(SERIAL_PORT_PARAMETER_NAME);
     RCLCPP_INFO(logger_, "Using serial port %s", serial_port_.c_str());
 
     // Read optional parameters with defaults
     int serial_baud_rate = 115200;
-    if (info.hardware_parameters.find("serial_baud_rate") != info.hardware_parameters.end()) {
+    if (info_.hardware_parameters.find("serial_baud_rate") != info_.hardware_parameters.end()) {
       try {
-        serial_baud_rate = std::stoi(info.hardware_parameters.at("serial_baud_rate"));
+        serial_baud_rate = std::stoi(info_.hardware_parameters.at("serial_baud_rate"));
         if (serial_baud_rate < 9600) {
           RCLCPP_WARN(
             logger_, "Baud rate %d below minimum 9600, using 115200", serial_baud_rate);
@@ -126,11 +126,11 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
       }
     }
 
-    if (info.hardware_parameters.find("communication_timeout_seconds") !=
-        info.hardware_parameters.end()) {
+    if (info_.hardware_parameters.find("communication_timeout_seconds") !=
+        info_.hardware_parameters.end()) {
       try {
         communication_timeout_ =
-          std::stod(info.hardware_parameters.at("communication_timeout_seconds"));
+          std::stod(info_.hardware_parameters.at("communication_timeout_seconds"));
         if (communication_timeout_ <= 0.0) {
           RCLCPP_WARN(logger_, "Timeout must be positive, using default 1.0s");
           communication_timeout_ = 1.0;
@@ -146,9 +146,10 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
 
     auto serial_port_handle = std::make_unique<ddsm210_driver::comm::SerialPort>();
 
-    if (!serial_port_handle->open(serial_port_, serial_baud_rate)) {
+    if (!serial_port_handle->open(serial_port_, static_cast<unsigned int>(serial_baud_rate))) {
       throw MotorError("Failed to open serial port");
-    }    velocity_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
+    }
+    velocity_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     effort_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     velocity_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     effort_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
@@ -159,7 +160,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     active_command_interfaces_.resize(motor_count_);
 
     // Configure interfaces and verify parameters for each motor
-    for (uint i = 0; i < info_.joints.size(); i++) {
+    for (size_t i = 0; i < info_.joints.size(); i++) {
       if (
         info_.joints[i].command_interfaces.size() != 2 ||
         info_.joints[i].state_interfaces.size() != 2) {
@@ -214,7 +215,7 @@ std::vector<hardware_interface::StateInterface> HardwareInterfaceDDSM210::export
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
 
-  for (uint i = 0; i < motor_count_; i++) {
+  for (size_t i = 0; i < motor_count_; i++) {
     state_interfaces.emplace_back(hardware_interface::StateInterface(
       info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_states_[i]));
 
@@ -230,7 +231,7 @@ HardwareInterfaceDDSM210::export_command_interfaces()
 {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
 
-  for (uint i = 0; i < motor_count_; i++) {
+  for (size_t i = 0; i < motor_count_; i++) {
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
       info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_commands_[i]));
 
@@ -256,7 +257,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_activate(
     }
 
     // Initialize motor states and commands
-    for (uint i = 0; i < motor_count_; i++) {
+    for (size_t i = 0; i < motor_count_; i++) {
       if (!is_motor_operational(i)) {
         throw MotorError("Motor " + std::to_string(i) + " is not operational");
       }
@@ -285,7 +286,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_deactivate(
   try {
     // Safely stop all motors
     stop_motors();
-    for (uint i = 0; i < motor_count_; i++) {
+    for (size_t i = 0; i < motor_count_; i++) {
       motor_states_[i] = MotorState::INACTIVE;
     }
     is_system_running_ = false;
@@ -308,7 +309,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
   }
 
   try {
-    for (uint i = 0; i < motor_count_; i++) {
+    for (size_t i = 0; i < motor_count_; i++) {
       if (!is_motor_operational(i)) {
         throw MotorError("Motor " + std::to_string(i) + " is not responding");
       }
@@ -338,7 +339,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
   is_system_running_ = true;
 
   try {
-    for (uint i = 0; i < motor_count_; i++) {
+    for (size_t i = 0; i < motor_count_; i++) {
       if (!is_motor_operational(i)) {
         throw MotorError("Motor " + std::to_string(i) + " is not operational");
       }
@@ -442,7 +443,7 @@ void HardwareInterfaceDDSM210::emergency_stop(const std::string & reason)
     try {
       // Immediately stop all motors
       stop_motors();
-      for (uint i = 0; i < motor_count_; i++) {
+      for (size_t i = 0; i < motor_count_; i++) {
         motor_states_[i] = MotorState::ERROR;
       }
     } catch (const std::exception & e) {
@@ -454,7 +455,7 @@ void HardwareInterfaceDDSM210::emergency_stop(const std::string & reason)
 void HardwareInterfaceDDSM210::stop_motors()
 {
   try {
-    for (uint i = 0; i < motor_count_; i++) {
+    for (size_t i = 0; i < motor_count_; i++) {
       velocity_commands_[i] = 0.0;
       effort_commands_[i] = 0.0;
     }
@@ -496,7 +497,7 @@ void HardwareInterfaceDDSM210::safety_monitor()
       // Check motor states (requires lock for accessing motor_states_)
       {
         std::lock_guard<std::mutex> lock(interface_mutex_);
-        for (uint i = 0; i < motor_count_; i++) {
+        for (size_t i = 0; i < motor_count_; i++) {
           if (!is_motor_operational(i)) {
             emergency_stop("Motor " + std::to_string(i) + " is not responding");
           }
