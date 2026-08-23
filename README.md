@@ -1,197 +1,118 @@
-ddsm-210
-==========================================
+# DDSM-210 ROS 2 Hardware Interface
 
-ROS control hardware interface for ddsm-210 servo
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ROS 2 Distro: Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-green)](https://docs.ros.org/en/jazzy/index.html)
 
-![Licence](https://img.shields.io/badge/License-MIT-blue.svg)
+ROS 2 hardware interface for DDSM-210 servo motors with safety monitoring and thread-safe communication.
 
-# Quick Start Instructions
+## Features
 
-If you are familiar with ROS 2, here are the quick-and-dirty build instructions.
+- **Configurable**: Runtime parameters for baud rate, timeout, and safety monitoring
+- **Robust**: Automatic emergency stop on communication loss
 
-  ```
-  cd $COLCON_WS
-  sudo apt-get update
-  sudo apt-get upgrade
-  git clone git@github.com:ddsm-210/ddsm-210.git src/ddsm-210
-  vcs import src --input src/ddsm-210/ddsm-210.iron.repos
-  vcs import src --input src/ddsm-210/ddsm-210.iron.upstream.repos
-  source /opt/ros/iron/setup.bash
-  rosdep install --ignore-src --from-paths src -y -r
-  colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release    # Faster and more efficient build type
-  cd ..
-  ```
-If you end up with missing dependencies, install them using commands from [Setup ROS Workspace](#setup-ros-workspace) section.
+## Installation
 
-# How to use this Package and ROS Introduction
+### Requirements
 
- - [Workflow With Docker](#workflow-with-docker)
-   * [Quick Start Using ROS with Docker (RosTeamWorkspace)](#quick-start-using-ros-with-docker-rosteamworkspace)
- - [Install and Build](#install-and-build)
-   * [Install ROS Iron and Development Tooling](#install-ros-iron-and-development-tooling)
-   * [Setup ROS Workspace](#setup-ros-workspace)
-   * [Configure and Build Workspace](#configure-and-build-workspace)
- - [Running Executables](#running-executables)
-   * [Using the Local Workspace](#using-the-local-workspace)
- - [Testing and Linting](#testing-and-linting)
- - [Creating a new ROS 2 Package](#creating-a-new-ros2-package)
- - [References](#references)
+- ROS 2 Jazzy
 
-## Workflow With [Docker](https://docs.docker.com/)
+### Setup
 
-> **NOTE:** If you do not use Docker in the current workflow you can skip this section and jump to [Install and Build](#install-and-build)
+```bash
+# Create workspace
+export COLCON_WS=~/ros_ddsm_ws
+mkdir -p $COLCON_WS/src
+cd $COLCON_WS
 
-We usually use a separate [Docker](https://docs.docker.com/) container for each of the projects/workspaces we work on.
-An internal tool from [Stogl Robotics](https://stoglrobotics.de) called [Ros Team Workspace (RTW)](https://rtw.stoglrobotics.de) simplifies the creation and work with  Docker based workspaces.
-The tool is targeted toward developers.
+# Clone repository
+git clone https://github.com/AlessioMorale/ros_ddsm_servo.git src/ddsm-210
 
-Installation of docker depends on the operating system you are using. Instructions can be found here: [Windows](https://docs.docker.com/desktop/install/windows-install/), [Mac](https://docs.docker.com/desktop/install/mac-install/) and [Linux](https://docs.docker.com/desktop/install/linux-install/).
+# Install dependencies and build
+rosdep install --from-paths src --ignore-src -y
+colcon build
 
-### Quick Start Using ROS with Docker (ros_team_workspace)
-
-Using [Ros Team Workspace (RTW)](https://rtw.stoglrobotics.de) you can easily with the following command:
+# Source workspace
+source install/setup.bash
 ```
-setup-ros-workspace-docker WS_FOLDER_NAME ROS_DISTRO
+
+## Configuration
+
+Add to your URDF inside `<ros2_control>`:
+
+```xml
+<hardware>
+  <plugin>ddsm210_hardware_interface/HardwareInterfaceDDSM210</plugin>
+  <param name="device">/dev/ttyUSB0</param>
+  <param name="serial_baud_rate">115200</param>
+  <param name="communication_timeout_seconds">1.0</param>
+  <param name="safety_check_period_ms">100</param>
+</hardware>
+
+<joint name="motor_1">
+  <command_interface name="velocity"/>
+  <state_interface name="velocity"/>
+</joint>
 ```
-and then after sourcing the new workspace with the `_WS_FOLDER_NAME` command, you can switch to the workspace with the:
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `device` | string | `/dev/ttyUSB0` | Serial port device path |
+| `serial_baud_rate` | int | `115200` | Baud rate (9600-921600) |
+| `communication_timeout_seconds` | double | `1.0` | Timeout before emergency stop |
+| `safety_check_period_ms` | int | `100` | Safety monitor check frequency |
+
+## Usage
+
+```bash
+# Launch controller manager
+ros2 launch ddsm210_hardware_interface demo.launch.py
+
+# Send commands
+ros2 topic pub /motor_1_velocity_controller/commands std_msgs/msg/Float64 "data: 50.0"
+
+# Run tests
+colcon test
 ```
-rtw_switch_to_docker
+
+## Troubleshooting
+
+**Cannot open device**: Check permissions and connection:
+```bash
+ls -la /dev/ttyUSB*
+sudo usermod -aG dialout $USER
 ```
-command.
 
-## Install and Build
+**Motors stop unexpectedly**: 
+- Check baud rate matches hardware configuration
+- Increase `communication_timeout_seconds` if needed
+- Verify serial cable connection
 
-### Install ROS Iron and Development Tooling
+**Tests fail with conversion errors**: This is intentional (strict type checking). Ensure you're using C++17 with `-Werror=conversion` enabled.
 
-These instructions assume you are running Ubuntu 20.04:
+## Architecture
 
-1. [Install ROS 2 Iron](https://index.ros.org/doc/ros2/Installation/Iron/Linux-Install-Debians/).
-   You can stop following along with the tutorial after you complete the section titled: [Environment setup](https://index.ros.org/doc/ros2/Installation/Iron/Linux-Install-Debians/#environment-setup).
-   Make sure you setup your environment with:
-   ```
-   source /opt/ros/iron/setup.bash
-   ```
+The interface uses lock-free atomic timestamps for safe communication monitoring:
+- Read/write operations store timestamps atomically (no mutex locks)
+- Background safety monitor (10 Hz) checks for timeouts without contention
+- Emergency stop triggered only when timeout detected
 
-   > **NOTE:** You may want to add that line to your `~/.bashrc`
+See `src/hardware_interface_ddsm210.cpp` for implementation details.
 
-   > **NOTE:** There is also a `zsh` version of the setup script.
+## Package Structure
 
-1. [Install ROS 2 Build Tools](https://index.ros.org/doc/ros2/Installation/Iron/Linux-Development-Setup/#install-development-tools-and-ros-tools).
-   You do not need to build ROS 2 from source.
-   Simply install the tooling under the section titled "Install development tools and ROS tools".
+```
+ddsm-210/
+├── ddsm210_driver/              # Serial communication driver
+├── ddsm210_hardware_interface/  # ROS 2 hardware interface
+│   ├── include/
+│   ├── src/
+│   └── test/                    # 42 unit tests
+├── ddsm210_crsf_protocol/       # Protocol implementation
+└── README.md
+```
 
-1. Install `ccache`:
-   ```
-   sudo apt install ccache
-   ```
+## License
 
-1. Setup `colcon mixin` [Reference](https://github.com/colcon/colcon-mixin-repository) for convenience commands.
-   ```
-   sudo apt install python3-colcon-mixin
-   colcon mixin add default https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml
-   colcon mixin update default
-   ```
-
-### Setup ROS Workspace
-
-1. Create a colcon workspace:
-   ```
-   export COLCON_WS=~/workspace/ros_ws_iron
-   mkdir -p $COLCON_WS/src
-   ```
-
-   > **NOTE:** Feel free to change `~/workspace/ros_ws_iron` to whatever absolute path you want.
-
-   > **NOTE:** Over time you will probably have multiple ROS workspaces, so it makes sense to them all in a subfolder.
-     Also, it is good practice to put the ROS version in the name of the workspace, for different tests you could just add a suffix to the base name `ros_ws_iron`.
-
-1. Download the required repositories and install package dependencies:
-   ```
-   cd $COLCON_WS
-   git clone git@github.com:ddsm-210/ddsm-210.git src/ddsm-210
-   vcs import src --input src/ddsm-210/ddsm-210.iron.repos
-   vcs import src --input src/ddsm-210/ddsm-210.iron.repos
-   rosdep install --ignore-src --from-paths src -y -r       # install also is there are unreleased packages
-   ```
-
-   Sometimes packages do not list all their dependencies so `rosdep` will not install everything.
-   If you are getting missing dependency errors, try manually install the following packages:
-   ```
-   sudo apt install ros2-iron-forward_command_controller ros2-iron-joint_state_broadcaster ros2-iron-joint_trajectory_controller ros2-iron-xacro
-   ```
-
-### Configure and Build Workspace:
-To configure and build workspace execute following commands:
-  ```
-  cd $COLCON_WS
-  colcon build --symlink-install --mixin rel-with-deb-info compile-commands ccache
-  ```
-
-## Running Executable
-
-See `README.md` files of the packages for information regarding running executables.
-
-<Add here some concrete data about current repository>
-
-### Using the Local Workspace
-
-To use the local workspace you have to source it by using local setup script:
-  ```
-  source $COLCON_WS/install/local_setup.bash
-  ```
-Since there are many errors one unintentionally do with wrong sourcing, please check also [Notes on Sourcing ROS Workspace](#notes-on-sourcing-ros-workspace).
-
-#### Notes on Sourcing ROS Workspace
-
-Sourcing of a workspace appends the binary and resource directories to appropriate environment variables.
-It is important that you do not run the build command in the same terminal that you have previously sourced your local workspace.
-This can cause dependency resolution issues.
-Here is some advice copied from [Official ROS Workspace Tutorial](https://index.ros.org/doc/ros2/Tutorials/Workspace/Creating-A-Workspace/) on this:
-
-Before sourcing the overlay, it is very important that you open a new terminal, separate from the one where you built the workspace.
-Sourcing an overlay in the same terminal where you built, or likewise building where an overlay is sourced, may create complex issues.
-
-Sourcing the local_setup of the overlay will only add the packages available in the overlay to your environment.
-`setup` sources the overlay as well as the underlay it was created in, allowing you to utilize both workspaces.
-
-So, sourcing your main ROS 2 installation’s setup and then the dev_ws overlay’s local_setup, like you just did, is the same as just sourcing dev_ws’s setup, because that includes the environment of the underlay it was created in.
-
-
-## Testing and Linting
-
-To test the packages packages built from source, use the following command with [colcon](https://colcon.readthedocs.io/en/released/).
-In order to run tests and linters you will have had to already built the workspace.
-To run the tests use following commands:
-  ```
-  cd $COLCON_WS
-  colcon test
-  colcon test-result
-  ```
-
-There are `--mixin` arguments that can be used to control testing with linters, specifically `linters-only` and `linters-skip`.
-
-## Creating a new ROS 2 Package
-
-If you need to create a new ROS 2 package it is helpful to start with the official boilerplate for a ROS 2 package.
-The command `ros2 pkg` can be used to generate the boilerplate details.
-For example to create a new ROS 2 package called `example_package` with a node called `example_node` and library called `example_library` use this command:
-  ```
-  ros2 pkg create --build-type ament_cmake --node-name example_node --library-name example_library example_package
-  ```
-
-## References
-
-Here are some useful references for developing with ROS 2:
-
- - [Official ROS 2 Tutorials](https://index.ros.org/doc/ros2/Tutorials/)
-   * [Launchfile](https://index.ros.org/doc/ros2/Tutorials/Launch-Files/Creating-Launch-Files/)
-   * [Package](https://index.ros.org/doc/ros2/Tutorials/Creating-Your-First-ROS2-Package/)
-   * [Parameters](https://index.ros.org/doc/ros2/Tutorials/Parameters/Understanding-ROS2-Parameters/)
-   * [Workspace](https://index.ros.org/doc/ros2/Tutorials/Workspace/Creating-A-Workspace/)
- - [Example ROS packages](https://github.com/ros2/examples)
- - [Colcon Documentation](https://colcon.readthedocs.io/en/released/#)
- - [ROS 2 Design Documentation](https://design.ros2.org/)
- - [ROS 2 Launch Architecture](https://github.com/ros2/launch/blob/master/launch/doc/source/architecture.rst)
-
-
-### Packages in `ddsm-210` metapackage
+MIT License - see [LICENSE](LICENSE) file

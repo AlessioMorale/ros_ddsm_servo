@@ -6,6 +6,10 @@
         <plugin>ddsm210_hardware_interface/HardwareInterfaceDDSM210</plugin>
         <!-- <param name="device">/dev/ttyUSB0</param> -->
         <param name="device">/dev/ttyAMA0</param>
+        <!-- Hardware interface configuration parameters -->
+        <param name="serial_baud_rate">115200</param>
+        <param name="communication_timeout_seconds">1.0</param>
+        <param name="safety_check_period_ms">100</param>
     </hardware>
     <joint name="joint1">
         <command_interface name="velocity"/>

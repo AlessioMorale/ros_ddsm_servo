@@ -116,10 +116,11 @@ private:
   std::mutex interface_mutex_;
   std::thread safety_thread_;
 
-  rclcpp::Time last_read_time_;
-  rclcpp::Time last_write_time_;
+  // Thread-safe timestamps (nanoseconds since epoch)
+  std::atomic<int64_t> last_read_time_ns_{0};
+  std::atomic<int64_t> last_write_time_ns_{0};
 
-  const double communication_timeout_;  // seconds
+  double communication_timeout_;  // seconds (now parameterized)
   std::unique_ptr<ddsm210_driver::Motors> motors_driver_;
 };
 

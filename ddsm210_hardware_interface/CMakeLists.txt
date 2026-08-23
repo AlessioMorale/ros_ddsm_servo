@@ -60,6 +60,9 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gmock REQUIRED)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  # Original test
   set(TEST_PROJECT_NAME test_${PROJECT_NAME})
   ament_add_gmock(${TEST_PROJECT_NAME} test/test_hardware_interface_ddsm210.cpp)
   target_include_directories(${TEST_PROJECT_NAME} PRIVATE include)
@@ -69,6 +72,32 @@ if(BUILD_TESTING)
     pluginlib
     ros2_control_test_assets
   )
+
+  # Atomic operations and thread safety tests
+  set(TEST_NAME test_hardware_interface_lifecycle)
+  ament_add_gtest(${TEST_NAME} test/test_hardware_interface_lifecycle.cpp)
+  target_include_directories(${TEST_NAME} PRIVATE include)
+  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+
+  set(TEST_NAME test_hardware_interface_threading)
+  ament_add_gtest(${TEST_NAME} test/test_hardware_interface_threading.cpp)
+  target_include_directories(${TEST_NAME} PRIVATE include)
+  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+
+  set(TEST_NAME test_hardware_interface_safety)
+  ament_add_gtest(${TEST_NAME} test/test_hardware_interface_safety.cpp)
+  target_include_directories(${TEST_NAME} PRIVATE include)
+  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+
+  set(TEST_NAME test_hardware_interface_integration)
+  ament_add_gtest(${TEST_NAME} test/test_hardware_interface_integration.cpp)
+  target_include_directories(${TEST_NAME} PRIVATE include)
+  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
+
+  set(TEST_NAME test_hardware_interface_edge_cases)
+  ament_add_gtest(${TEST_NAME} test/test_hardware_interface_edge_cases.cpp)
+  target_include_directories(${TEST_NAME} PRIVATE include)
+  ament_target_dependencies(${TEST_NAME} rclcpp ddsm210_driver)
 endif()
 
 install(DIRECTORY

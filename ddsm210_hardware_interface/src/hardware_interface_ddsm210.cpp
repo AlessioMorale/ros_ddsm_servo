@@ -19,6 +19,7 @@
 
 #include <cstdlib>
 #include <exception>
+#include <string>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 
 #include "ddsm210_driver/comm/serial_port.hpp"
@@ -29,6 +30,13 @@
 namespace ddsm210_hardware_interface
 {
 const char SERIAL_PORT_PARAMETER_NAME[]{"device"};
+
+// Helper function to get current time as nanoseconds since epoch
+static int64_t now_ns()
+{
+  return std::chrono::steady_clock::now().time_since_epoch().count();
+}
+
 HardwareInterfaceDDSM210::HardwareInterfaceDDSM210()
 : motor_count_(0),
   velocity_commands_{},
@@ -39,7 +47,7 @@ HardwareInterfaceDDSM210::HardwareInterfaceDDSM210()
   active_command_interfaces_{},
   is_emergency_stopped_(false),
   is_initialized_(false),
-  communication_timeout_(1.0)  // seconds
+  communication_timeout_(1.0)  // seconds (default, will be parameterized in on_init)
 {
   safety_thread_ = std::thread(&HardwareInterfaceDDSM210::safety_monitor, this);
 }
@@ -47,10 +55,20 @@ HardwareInterfaceDDSM210::HardwareInterfaceDDSM210()
 HardwareInterfaceDDSM210::~HardwareInterfaceDDSM210()
 {
   try {
-    emergency_stop("Destructor called - shutting down safely");
+    // Signal safety monitor to stop before joining
+    stop_safety_monitor_.store(true, std::memory_order_release);
     if (safety_thread_.joinable()) {
-      stop_safety_monitor_ = true;
       safety_thread_.join();
+    }
+    // Only attempt emergency stop if we can acquire the lock without blocking
+    // to avoid deadlock scenarios
+    if (interface_mutex_.try_lock()) {
+      try {
+        stop_motors();
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(logger_, "Error stopping motors in destructor: %s", e.what());
+      }
+      interface_mutex_.unlock();
     }
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Error during shutdown: %s", e.what());
@@ -92,13 +110,45 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     serial_port_ = info.hardware_parameters.at(SERIAL_PORT_PARAMETER_NAME);
     RCLCPP_INFO(logger_, "Using serial port %s", serial_port_.c_str());
 
-    auto serial_port_handle = std::make_unique<ddsm210_driver::comm::SerialPort>();
-
-    if (!serial_port_handle->open(serial_port_, 115200)) {
-      throw MotorError("Failed to open serial port");
+    // Read optional parameters with defaults
+    int serial_baud_rate = 115200;
+    if (info.hardware_parameters.find("serial_baud_rate") != info.hardware_parameters.end()) {
+      try {
+        serial_baud_rate = std::stoi(info.hardware_parameters.at("serial_baud_rate"));
+        if (serial_baud_rate < 9600) {
+          RCLCPP_WARN(
+            logger_, "Baud rate %d below minimum 9600, using 115200", serial_baud_rate);
+          serial_baud_rate = 115200;
+        }
+      } catch (const std::exception & e) {
+        RCLCPP_WARN(logger_, "Invalid serial_baud_rate parameter: %s, using default",
+          e.what());
+      }
     }
 
-    velocity_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
+    if (info.hardware_parameters.find("communication_timeout_seconds") !=
+        info.hardware_parameters.end()) {
+      try {
+        communication_timeout_ =
+          std::stod(info.hardware_parameters.at("communication_timeout_seconds"));
+        if (communication_timeout_ <= 0.0) {
+          RCLCPP_WARN(logger_, "Timeout must be positive, using default 1.0s");
+          communication_timeout_ = 1.0;
+        }
+      } catch (const std::exception & e) {
+        RCLCPP_WARN(logger_, "Invalid communication_timeout_seconds parameter: %s, using default",
+          e.what());
+      }
+    }
+
+    RCLCPP_INFO(logger_, "Hardware configuration: baud_rate=%d, timeout=%.2fs", serial_baud_rate,
+      communication_timeout_);
+
+    auto serial_port_handle = std::make_unique<ddsm210_driver::comm::SerialPort>();
+
+    if (!serial_port_handle->open(serial_port_, serial_baud_rate)) {
+      throw MotorError("Failed to open serial port");
+    }    velocity_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     effort_commands_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     velocity_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     effort_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
@@ -148,8 +198,10 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
       });
 
     is_initialized_ = true;
-    last_read_time_ = rclcpp::Clock().now();
-    last_write_time_ = last_read_time_;
+    // Initialize atomic timestamps
+    int64_t current_time_ns = now_ns();
+    last_read_time_ns_.store(current_time_ns, std::memory_order_release);
+    last_write_time_ns_.store(current_time_ns, std::memory_order_release);
 
     return hardware_interface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
@@ -265,7 +317,8 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
       effort_states_[i] = motor_feedbacks_[i].current;
     }
 
-    last_read_time_ = rclcpp::Clock().now();
+    // Update atomic timestamp (thread-safe, no lock needed)
+    last_read_time_ns_.store(now_ns(), std::memory_order_release);
     return hardware_interface::return_type::OK;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Read error: %s", e.what());
@@ -305,7 +358,8 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
         effort_commands_[i]);
     }
 
-    last_write_time_ = rclcpp::Clock().now();
+    // Update atomic timestamp (thread-safe, no lock needed)
+    last_write_time_ns_.store(now_ns(), std::memory_order_release);
     return hardware_interface::return_type::OK;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Write error: %s", e.what());
@@ -416,25 +470,36 @@ void HardwareInterfaceDDSM210::safety_monitor()
 {
   const auto check_period = std::chrono::milliseconds(100);  // 10Hz safety checks
 
-  while (!stop_safety_monitor_) {
+  while (!stop_safety_monitor_.load(std::memory_order_acquire)) {
     try {
       if (!is_system_running_) {
         std::this_thread::sleep_for(check_period);
         continue;
       }
-      // Check communication timeouts
-      auto now = rclcpp::Clock().now();
-      if ((now - last_read_time_).seconds() > communication_timeout_) {
+      
+      // Check communication timeouts using atomic timestamps (lock-free)
+      int64_t current_time_ns = now_ns();
+      int64_t last_read_ns = last_read_time_ns_.load(std::memory_order_acquire);
+      int64_t last_write_ns = last_write_time_ns_.load(std::memory_order_acquire);
+      
+      // Convert nanoseconds to seconds
+      double read_timeout_s = static_cast<double>(current_time_ns - last_read_ns) / 1e9;
+      double write_timeout_s = static_cast<double>(current_time_ns - last_write_ns) / 1e9;
+      
+      if (read_timeout_s > communication_timeout_) {
         emergency_stop("Communication timeout - no recent reads");
       }
-      if ((now - last_write_time_).seconds() > communication_timeout_) {
+      if (write_timeout_s > communication_timeout_) {
         emergency_stop("Communication timeout - no recent writes");
       }
 
-      // Check motor states
-      for (uint i = 0; i < motor_count_; i++) {
-        if (!is_motor_operational(i)) {
-          emergency_stop("Motor " + std::to_string(i) + " is not responding");
+      // Check motor states (requires lock for accessing motor_states_)
+      {
+        std::lock_guard<std::mutex> lock(interface_mutex_);
+        for (uint i = 0; i < motor_count_; i++) {
+          if (!is_motor_operational(i)) {
+            emergency_stop("Motor " + std::to_string(i) + " is not responding");
+          }
         }
       }
     } catch (const std::exception & e) {
