@@ -109,11 +109,14 @@ private:
 
   std::vector<MotorState> motor_states_;
   std::vector<uint8_t> motor_ids_;
+  std::vector<bool> invert_motor_;
   std::atomic<bool> is_emergency_stopped_;
   std::atomic<bool> is_initialized_;
   std::atomic<bool> stop_safety_monitor_{false};
   std::atomic<bool> is_system_running_{false};
   std::mutex interface_mutex_;
+  std::mutex feedback_mutex_;
+  void emergency_stop_locked(const std::string & reason);
   std::thread safety_thread_;
 
   // Thread-safe timestamps (nanoseconds since epoch)

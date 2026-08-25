@@ -8,7 +8,7 @@ controller_manager:
       type: joint_state_broadcaster/JointStateBroadcaster
 
     velocity_controller:
-      type: velocity_controllers/JointGroupVelocityController
+      type: forward_command_controller/ForwardCommandController
 
     ddsm210_hardware_interface:
       type: ddsm210_hardware_interface/DDSM210HardwareInterface
@@ -17,3 +17,4 @@ velocity_controller:
   ros__parameters:
     joints:
       - joint1
+    interface_name: velocity

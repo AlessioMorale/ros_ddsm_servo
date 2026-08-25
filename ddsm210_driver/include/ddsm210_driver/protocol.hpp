@@ -60,6 +60,8 @@ enum class DDSM210_set_id_key : uint8_t
 {
   SET_ID_KEY = 0x53,
 };
+// CMD_SET_ID is only accepted when the packet is addressed to this id.
+static constexpr uint8_t DDSM210_SET_ID_BROADCAST_ADDRESS = 0xAA;
 static constexpr uint8_t DDSM210_PACKET_SIZE = 10;
 typedef struct
 {
@@ -139,6 +141,11 @@ public:
   static constexpr float TEMPERATURE_SCALE = 1.0f;
 
   static constexpr uint32_t COMMANDS_DELAY_US = 4000;
+  // TX/RX are bus-shared across motors (wired-AND'd responses), so overlapping replies get
+  // corrupted. Bound how long we wait for a motor's response before moving on to the next one.
+  // Measured round trips for some motors regularly exceed 12ms in practice, so this needs
+  // generous headroom to avoid mistaking a slow-but-healthy reply for a dead motor.
+  static constexpr uint32_t RESPONSE_TIMEOUT_US = 50000;
   static constexpr unsigned int SET_ID_RESEND_COUNT = 5;
 
   static float convert(int16_t value, float scale)
