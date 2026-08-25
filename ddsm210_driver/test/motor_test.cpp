@@ -48,11 +48,11 @@ public:
   {
     protocol::DDSM210_packet_t packet;
     std::memcpy(&packet, data.data(), sizeof(packet));
-    uint8_t id = packet.data.id;
     protocol::DDSM210_command cmd = packet.data.cmd;
     if (enable_replies) {
       if (cmd == protocol::DDSM210_command::CMD_SET_ID) {
-        send_set_id_response(id);
+        // The actuator responds using its newly assigned id, not the broadcast address.
+        send_set_id_response(packet.data.packet.set_id.id);
       }
     }
     sent_packets->push(packet);

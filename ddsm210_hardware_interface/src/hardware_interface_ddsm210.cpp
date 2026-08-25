@@ -84,7 +84,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_configure(
     return hardware_interface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Configuration error: %s", e.what());
-    emergency_stop("Failed to configure motors");
+    emergency_stop_locked("Failed to configure motors");
     return hardware_interface::CallbackReturn::ERROR;
   }
 }
@@ -155,6 +155,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
     effort_states_.resize(motor_count_, std::numeric_limits<double>::quiet_NaN());
     motor_states_.resize(motor_count_, MotorState::UNKNOWN);
     motor_ids_.resize(motor_count_, 0);
+    invert_motor_.resize(motor_count_, false);
     motor_feedbacks_.resize(motor_count_);
     // Initialize command interface states
     active_command_interfaces_.resize(motor_count_);
@@ -183,6 +184,12 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
           motor_id_param->second);
       }
       // Set default command interface to velocity
+      
+      auto invert_param = info_.joints[i].parameters.find("invert");
+      if (invert_param != info_.joints[i].parameters.end()) {
+        invert_motor_[i] = (invert_param->second == "true" || invert_param->second == "True" || invert_param->second == "1");
+      }
+
       active_command_interfaces_[i] = hardware_interface::HW_IF_VELOCITY;
       // Initialize motor state
       motor_states_[i] = MotorState::INITIALIZED;
@@ -273,7 +280,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_activate(
     return hardware_interface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Activation error: %s", e.what());
-    emergency_stop("Failed to activate motors");
+    emergency_stop_locked("Failed to activate motors");
     return hardware_interface::CallbackReturn::ERROR;
   }
 }
@@ -294,7 +301,7 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_deactivate(
     return hardware_interface::CallbackReturn::SUCCESS;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Deactivation error: %s", e.what());
-    emergency_stop("Failed to deactivate motors safely");
+    emergency_stop_locked("Failed to deactivate motors safely");
     return hardware_interface::CallbackReturn::ERROR;
   }
 }
@@ -314,8 +321,14 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
         throw MotorError("Motor " + std::to_string(i) + " is not responding");
       }
 
-      velocity_states_[i] = motor_feedbacks_[i].velocity;
-      effort_states_[i] = motor_feedbacks_[i].current;
+      float vel = motor_feedbacks_[i].velocity;
+      float eff = motor_feedbacks_[i].current;
+      if (invert_motor_[i]) {
+        vel = -vel;
+        eff = -eff;
+      }
+      velocity_states_[i] = vel;
+      effort_states_[i] = eff;
     }
 
     // Update atomic timestamp (thread-safe, no lock needed)
@@ -323,7 +336,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
     return hardware_interface::return_type::OK;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Read error: %s", e.what());
-    emergency_stop("Failed to read motor states");
+    emergency_stop_locked("Failed to read motor states");
     return hardware_interface::return_type::ERROR;
   }
 }
@@ -352,6 +365,9 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
         command = static_cast<float>(velocity_commands_[i]);
       }
       motors_driver_->set_mode(motor_ids_[i], motor_mode);
+      if (invert_motor_[i]) {
+        command = -command;
+      }
       motors_driver_->set_target(motor_ids_[i], command);
 
       RCLCPP_INFO_THROTTLE(
@@ -364,7 +380,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
     return hardware_interface::return_type::OK;
   } catch (const std::exception & e) {
     RCLCPP_ERROR(logger_, "Write error: %s", e.what());
-    emergency_stop("Failed to write motor commands");
+    emergency_stop_locked("Failed to write motor commands");
     return hardware_interface::return_type::ERROR;
   }
 }
@@ -409,7 +425,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::perform_command_mode_s
 void HardwareInterfaceDDSM210::motor_feedback_callback(
   const ddsm210_driver::Motor_feedback_t & feedback)
 {
-  std::lock_guard<std::mutex> lock(interface_mutex_);
+  std::lock_guard<std::mutex> lock(feedback_mutex_);
   static rclcpp::Clock log_clock;
 
   size_t motor_index = 0;
@@ -435,6 +451,11 @@ void HardwareInterfaceDDSM210::motor_feedback_callback(
 void HardwareInterfaceDDSM210::emergency_stop(const std::string & reason)
 {
   std::lock_guard<std::mutex> lock(interface_mutex_);
+  emergency_stop_locked(reason);
+}
+
+void HardwareInterfaceDDSM210::emergency_stop_locked(const std::string & reason)
+{
 
   if (!is_emergency_stopped_) {
     is_emergency_stopped_ = true;
@@ -499,7 +520,7 @@ void HardwareInterfaceDDSM210::safety_monitor()
         std::lock_guard<std::mutex> lock(interface_mutex_);
         for (size_t i = 0; i < motor_count_; i++) {
           if (!is_motor_operational(i)) {
-            emergency_stop("Motor " + std::to_string(i) + " is not responding");
+            emergency_stop_locked("Motor " + std::to_string(i) + " is not responding");
           }
         }
       }

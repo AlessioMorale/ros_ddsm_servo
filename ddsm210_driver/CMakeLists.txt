@@ -49,11 +49,16 @@ target_link_libraries(${CLI_PROJECT_NAME}
 install(
   TARGETS
     ${PROJECT_NAME}
-    ${CLI_PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+)
+
+install(
+  TARGETS
+    ${CLI_PROJECT_NAME}
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
