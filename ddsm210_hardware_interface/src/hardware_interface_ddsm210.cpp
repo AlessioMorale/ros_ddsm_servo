@@ -218,32 +218,41 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_init(
   }
 }
 
-std::vector<hardware_interface::StateInterface> HardwareInterfaceDDSM210::export_state_interfaces()
+std::vector<hardware_interface::StateInterface::ConstSharedPtr>
+HardwareInterfaceDDSM210::on_export_state_interfaces()
 {
-  std::vector<hardware_interface::StateInterface> state_interfaces;
+  std::vector<hardware_interface::StateInterface::ConstSharedPtr> state_interfaces;
+  state_interfaces_.clear();
 
   for (size_t i = 0; i < motor_count_; i++) {
-    state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_states_[i]));
-
-    state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_states_[i]));
+    auto velocity_interface = std::make_shared<hardware_interface::StateInterface>(
+      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, "double", "0.0");
+    auto effort_interface = std::make_shared<hardware_interface::StateInterface>(
+      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, "double", "0.0");
+    state_interfaces_.push_back(velocity_interface);
+    state_interfaces_.push_back(effort_interface);
+    state_interfaces.push_back(velocity_interface);
+    state_interfaces.push_back(effort_interface);
   }
 
   return state_interfaces;
 }
 
-std::vector<hardware_interface::CommandInterface>
-HardwareInterfaceDDSM210::export_command_interfaces()
+std::vector<hardware_interface::CommandInterface::SharedPtr>
+HardwareInterfaceDDSM210::on_export_command_interfaces()
 {
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
+  std::vector<hardware_interface::CommandInterface::SharedPtr> command_interfaces;
+  command_interfaces_.clear();
 
   for (size_t i = 0; i < motor_count_; i++) {
-    command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_commands_[i]));
-
-    command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &effort_commands_[i]));
+    auto velocity_interface = std::make_shared<hardware_interface::CommandInterface>(
+      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, "double", "0.0");
+    auto effort_interface = std::make_shared<hardware_interface::CommandInterface>(
+      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, "double", "0.0");
+    command_interfaces_.push_back(velocity_interface);
+    command_interfaces_.push_back(effort_interface);
+    command_interfaces.push_back(velocity_interface);
+    command_interfaces.push_back(effort_interface);
   }
 
   return command_interfaces;
@@ -273,6 +282,14 @@ hardware_interface::CallbackReturn HardwareInterfaceDDSM210::on_activate(
       effort_commands_[i] = 0.0;
       velocity_states_[i] = 0.0;
       effort_states_[i] = 0.0;
+      if (command_interfaces_.size() == motor_count_ * 2) {
+        (void)command_interfaces_[2 * i]->set_value(0.0);
+        (void)command_interfaces_[2 * i + 1]->set_value(0.0);
+      }
+      if (state_interfaces_.size() == motor_count_ * 2) {
+        (void)state_interfaces_[2 * i]->set_value(0.0);
+        (void)state_interfaces_[2 * i + 1]->set_value(0.0);
+      }
       motor_states_[i] = MotorState::ACTIVE;
     }
 
@@ -329,6 +346,10 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
       }
       velocity_states_[i] = vel;
       effort_states_[i] = eff;
+      if (state_interfaces_.size() == motor_count_ * 2) {
+        (void)state_interfaces_[2 * i]->set_value(static_cast<double>(vel));
+        (void)state_interfaces_[2 * i + 1]->set_value(static_cast<double>(eff));
+      }
     }
 
     // Update atomic timestamp (thread-safe, no lock needed)
@@ -356,6 +377,10 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
       if (!is_motor_operational(i)) {
         throw MotorError("Motor " + std::to_string(i) + " is not operational");
       }
+      if (command_interfaces_.size() == motor_count_ * 2) {
+        (void)command_interfaces_[2 * i]->get_value(velocity_commands_[i], true);
+        (void)command_interfaces_[2 * i + 1]->get_value(effort_commands_[i], true);
+      }
       float command = 0.0;
       ddsm210_driver::command_mode motor_mode{ddsm210_driver::command_mode::MODE_VELOCITY};
       if (active_command_interfaces_[i] == hardware_interface::HW_IF_EFFORT) {
@@ -371,7 +396,7 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
       motors_driver_->set_target(motor_ids_[i], command);
 
       RCLCPP_INFO_THROTTLE(
-        logger_, log_clock, 30000, "Motor %d: velocity=%.2f, effort=%.2f", i, velocity_commands_[i],
+        logger_, log_clock, 30000, "Motor %lu: velocity=%.2f, effort=%.2f", i, velocity_commands_[i],
         effort_commands_[i]);
     }
 
@@ -399,8 +424,14 @@ hardware_interface::return_type HardwareInterfaceDDSM210::perform_command_mode_s
     // Reset commands for stopped interface
     if (interface.find(hardware_interface::HW_IF_VELOCITY) != std::string::npos) {
       velocity_commands_[joint_idx] = 0.0;
+      if (command_interfaces_.size() == motor_count_ * 2) {
+        (void)command_interfaces_[2 * joint_idx]->set_value(0.0);
+      }
     } else if (interface.find(hardware_interface::HW_IF_EFFORT) != std::string::npos) {
       effort_commands_[joint_idx] = 0.0;
+      if (command_interfaces_.size() == motor_count_ * 2) {
+        (void)command_interfaces_[2 * joint_idx + 1]->set_value(0.0);
+      }
     }
   }
 
@@ -479,6 +510,10 @@ void HardwareInterfaceDDSM210::stop_motors()
     for (size_t i = 0; i < motor_count_; i++) {
       velocity_commands_[i] = 0.0;
       effort_commands_[i] = 0.0;
+      if (command_interfaces_.size() == motor_count_ * 2) {
+        (void)command_interfaces_[2 * i]->set_value(0.0);
+        (void)command_interfaces_[2 * i + 1]->set_value(0.0);
+      }
     }
 
     motors_driver_->set_fail_safe();

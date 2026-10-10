@@ -55,10 +55,12 @@ public:
     const rclcpp_lifecycle::State & previous_state) override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
+  std::vector<hardware_interface::StateInterface::ConstSharedPtr>
+  on_export_state_interfaces() override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
+  std::vector<hardware_interface::CommandInterface::SharedPtr>
+  on_export_command_interfaces() override;
 
   TEMPLATES__ROS2_CONTROL__VISIBILITY_PUBLIC
   hardware_interface::CallbackReturn on_activate(
@@ -103,6 +105,8 @@ private:
   std::vector<double> effort_commands_;
   std::vector<double> velocity_states_;
   std::vector<double> effort_states_;
+  std::vector<hardware_interface::StateInterface::SharedPtr> state_interfaces_;
+  std::vector<hardware_interface::CommandInterface::SharedPtr> command_interfaces_;
   std::vector<ddsm210_driver::Motor_feedback_t> motor_feedbacks_;
   std::vector<std::string> active_command_interfaces_;
   std::string serial_port_{};
