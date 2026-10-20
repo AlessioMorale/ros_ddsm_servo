@@ -3,7 +3,7 @@
 <package format="3">
   <name>ddsm210_hardware_interface</name>
   <version>0.0.0</version>
-  <description>Hardware interface for ddsm-210 servo</description>
+  <description>Slamming Works ros2_control hardware interface for DDSM-210 servo motors</description>
   <maintainer email="alessiomorale@gmail.com">Alessio Morale</maintainer>
   <license>MIT</license>
 

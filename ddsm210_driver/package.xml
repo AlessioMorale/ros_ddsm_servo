@@ -3,7 +3,7 @@
 <package format="3">
   <name>ddsm210_driver</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Slamming Works serial communication driver for DDSM-210 servo motors</description>
   <maintainer email="alessio@todo.todo">alessio</maintainer>
   <license>MIT</license>
 
