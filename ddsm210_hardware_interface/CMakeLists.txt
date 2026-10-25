@@ -78,6 +78,11 @@ if(BUILD_TESTING)
     ros2_control_test_assets::ros2_control_test_assets
   )
 
+  # Unit conversions, no hardware needed
+  ament_add_gtest(test_units test/test_units.cpp)
+  target_include_directories(test_units PRIVATE include)
+  target_link_libraries(test_units ddsm210_driver::ddsm210_driver)
+
   # Atomic operations and thread safety tests
   set(TEST_NAME test_hardware_interface_lifecycle)
   ament_add_gtest(${TEST_NAME} test/test_hardware_interface_lifecycle.cpp)

@@ -24,6 +24,7 @@
 
 #include "ddsm210_driver/comm/serial_port.hpp"
 #include "ddsm210_driver/motors.hpp"
+#include "ddsm210_hardware_interface/units.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -338,8 +339,9 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
         throw MotorError("Motor " + std::to_string(i) + " is not responding");
       }
 
-      float vel = motor_feedbacks_[i].velocity;
-      float eff = motor_feedbacks_[i].current;
+      // The driver reports rpm, the velocity state interface is rad/s
+      double vel = units::rpm_to_rad_s(static_cast<double>(motor_feedbacks_[i].velocity));
+      double eff = static_cast<double>(motor_feedbacks_[i].current);
       if (invert_motor_[i]) {
         vel = -vel;
         eff = -eff;
@@ -347,8 +349,8 @@ hardware_interface::return_type HardwareInterfaceDDSM210::read(
       velocity_states_[i] = vel;
       effort_states_[i] = eff;
       if (state_interfaces_.size() == motor_count_ * 2) {
-        (void)state_interfaces_[2 * i]->set_value(static_cast<double>(vel));
-        (void)state_interfaces_[2 * i + 1]->set_value(static_cast<double>(eff));
+        (void)state_interfaces_[2 * i]->set_value(vel);
+        (void)state_interfaces_[2 * i + 1]->set_value(eff);
       }
     }
 
@@ -387,7 +389,8 @@ hardware_interface::return_type HardwareInterfaceDDSM210::write(
         command = static_cast<float>(effort_commands_[i]);
         motor_mode = ddsm210_driver::command_mode::MODE_OPENLOOP;
       } else {
-        command = static_cast<float>(velocity_commands_[i]);
+        // The velocity command interface is rad/s, the driver takes rpm
+        command = static_cast<float>(units::command_rad_s_to_rpm(velocity_commands_[i]));
       }
       motors_driver_->set_mode(motor_ids_[i], motor_mode);
       if (invert_motor_[i]) {
